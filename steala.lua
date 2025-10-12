@@ -19,7 +19,7 @@ local ESPEnabled = true
 local TargetLock = nil
 local RightMouseDown = false
 local WallVisible = false
-local M4A1Wall = nil
+local OriginalM4A1Properties = nil
 
 -- Team colors
 local TeamColors = {
@@ -31,36 +31,42 @@ local TeamColors = {
 -- Table to store ESP data
 local PlayerESP = {}
 
--- Create M4A1 Wall function
+-- Save original M4A1 properties
+local function saveOriginalProperties()
+    local m4a1 = Workspace:FindFirstChild("M4A1")
+    if m4a1 and m4a1:IsA("Part") then
+        OriginalM4A1Properties = {
+            Size = m4a1.Size,
+            Transparency = m4a1.Transparency,
+            CanCollide = m4a1.CanCollide,
+            Anchored = m4a1.Anchored,
+            Material = m4a1.Material,
+            Color = m4a1.Color,
+            CFrame = m4a1.CFrame
+        }
+    end
+end
+
+-- Create M4A1 Wall function (modify the original)
 local function createM4A1Wall()
-    if M4A1Wall then
-        M4A1Wall:Destroy()
-        M4A1Wall = nil
+    local m4a1 = Workspace:FindFirstChild("M4A1")
+    if not m4a1 then
+        warn("M4A1 not found in workspace")
         return
     end
     
-    -- Find M4A1 model in workspace
-    local m4a1Model = Workspace:FindFirstChild("M4A1")
-    if not m4a1Model then
-        warn("M4A1 model not found in workspace")
-        return
+    -- Save original properties if not already saved
+    if not OriginalM4A1Properties then
+        saveOriginalProperties()
     end
     
-    -- Clone the model and modify it
-    local wall = m4a1Model:Clone()
-    wall.Name = "M4A1Wall"
-    
-    -- Modify all parts in the model
-    for _, part in pairs(wall:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.Transparency = 1  -- Make transparent
-            part.CanCollide = false  -- No collision
-            part.Size = Vector3.new(400, 0.3, 2048)  -- Set custom size
-            part.Anchored = true  -- Keep it in place
-            part.Material = Enum.Material.Neon  -- Make it glow
-            part.Color = Color3.fromRGB(0, 255, 255)  -- Cyan color
-        end
-    end
+    -- Apply wall properties to the original M4A1
+    m4a1.Transparency = 1  -- Fully transparent
+    m4a1.CanCollide = false  -- No collision
+    m4a1.Size = Vector3.new(400, 0.3, 2048)  -- Your specified size
+    m4a1.Anchored = true  -- Keep it in place
+    m4a1.Material = Enum.Material.Neon  -- Make it glow
+    m4a1.Color = Color3.fromRGB(0, 255, 255)  -- Cyan color
     
     -- Position the wall in front of the player
     local character = LocalPlayer.Character
@@ -69,34 +75,40 @@ local function createM4A1Wall()
         local lookVector = rootPart.CFrame.LookVector
         
         -- Position wall 20 studs in front of player
-        wall:SetPrimaryPartCFrame(CFrame.new(
+        m4a1.CFrame = CFrame.new(
             rootPart.Position + (lookVector * 20),
             rootPart.Position + (lookVector * 100)
-        ))
+        )
     end
     
-    wall.Parent = Workspace
-    M4A1Wall = wall
     WallVisible = true
+    print("M4A1 transformed into Wall")
 end
 
--- Remove M4A1 Wall function
+-- Remove M4A1 Wall function (restore original)
 local function removeM4A1Wall()
-    if M4A1Wall then
-        M4A1Wall:Destroy()
-        M4A1Wall = nil
-        WallVisible = false
+    local m4a1 = Workspace:FindFirstChild("M4A1")
+    if m4a1 and OriginalM4A1Properties then
+        -- Restore original properties
+        m4a1.Size = OriginalM4A1Properties.Size
+        m4a1.Transparency = OriginalM4A1Properties.Transparency
+        m4a1.CanCollide = OriginalM4A1Properties.CanCollide
+        m4a1.Anchored = OriginalM4A1Properties.Anchored
+        m4a1.Material = OriginalM4A1Properties.Material
+        m4a1.Color = OriginalM4A1Properties.Color
+        m4a1.CFrame = OriginalM4A1Properties.CFrame
     end
+    
+    WallVisible = false
+    print("M4A1 restored to original")
 end
 
 -- Toggle M4A1 Wall function
 local function toggleM4A1Wall()
     if WallVisible then
         removeM4A1Wall()
-        print("M4A1 Wall removed")
     else
         createM4A1Wall()
-        print("M4A1 Wall created")
     end
 end
 
@@ -340,15 +352,18 @@ end
 
 -- Update M4A1 Wall position to follow player
 local function updateWallPosition()
-    if M4A1Wall and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        local rootPart = LocalPlayer.Character.HumanoidRootPart
-        local lookVector = rootPart.CFrame.LookVector
-        
-        -- Update wall position to always be in front of player
-        M4A1Wall:SetPrimaryPartCFrame(CFrame.new(
-            rootPart.Position + (lookVector * 20),
-            rootPart.Position + (lookVector * 100)
-        ))
+    if WallVisible then
+        local m4a1 = Workspace:FindFirstChild("M4A1")
+        if m4a1 and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local rootPart = LocalPlayer.Character.HumanoidRootPart
+            local lookVector = rootPart.CFrame.LookVector
+            
+            -- Update wall position to always be in front of player
+            m4a1.CFrame = CFrame.new(
+                rootPart.Position + (lookVector * 20),
+                rootPart.Position + (lookVector * 100)
+            )
+        end
     end
 end
 
