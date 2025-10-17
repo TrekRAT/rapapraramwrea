@@ -12,14 +12,12 @@ local AIM_SPEED = 0.3        -- Faster since no anti-cheat
 local MAX_DISTANCE = 500
 local ESP_FILL_TRANSPARENCY = 0.5
 local TOGGLE_KEY = Enum.KeyCode.F
-local WALL_KEY = Enum.KeyCode.J  -- New keybind for wall
+local TELEPORT_KEY = Enum.KeyCode.J  -- J key for teleporting TouchGivers
 
 -- State
 local ESPEnabled = true
 local TargetLock = nil
 local RightMouseDown = false
-local WallVisible = false
-local OriginalM4A1Properties = nil
 
 -- Team colors
 local TeamColors = {
@@ -31,85 +29,65 @@ local TeamColors = {
 -- Table to store ESP data
 local PlayerESP = {}
 
--- Save original M4A1 properties
-local function saveOriginalProperties()
-    local m4a1 = Workspace:FindFirstChild("M4A1")
-    if m4a1 and m4a1:IsA("Part") then
-        OriginalM4A1Properties = {
-            Size = m4a1.Size,
-            Transparency = m4a1.Transparency,
-            CanCollide = m4a1.CanCollide,
-            Anchored = m4a1.Anchored,
-            Material = m4a1.Material,
-            Color = m4a1.Color,
-            CFrame = m4a1.CFrame
-        }
+-- TouchGiver teleport function
+local function teleportAllTouchGivers()
+    local character = LocalPlayer.Character
+    if not character then return end
+    
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return end
+    
+    -- Find all TouchGiver objects in workspace
+    local touchGivers = {}
+    
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj.Name == "TouchGiver" then
+            table.insert(touchGivers, {
+                object = obj,
+                originalCFrame = obj:GetPivot()
+            })
+        end
     end
-end
-
--- Create M4A1 Wall function (modify the original)
-local function createM4A1Wall()
-    local m4a1 = Workspace:FindFirstChild("M4A1")
-    if not m4a1 then
-        warn("M4A1 not found in workspace")
+    
+    if #touchGivers == 0 then
+        warn("No TouchGiver objects found in workspace!")
         return
     end
     
-    -- Save original properties if not already saved
-    if not OriginalM4A1Properties then
-        saveOriginalProperties()
+    print("Found " .. #touchGivers .. " TouchGiver objects")
+    
+    -- Enable noclip for player
+    for _, part in pairs(character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = false
+        end
     end
     
-    -- Apply wall properties to the original M4A1
-    m4a1.Transparency = 1  -- Fully transparent
-    m4a1.CanCollide = false  -- No collision
-    m4a1.Size = Vector3.new(400, 0.3, 2048)  -- Your specified size
-    m4a1.Anchored = true  -- Keep it in place
-    m4a1.Material = Enum.Material.Neon  -- Make it glow
-    m4a1.Color = Color3.fromRGB(0, 255, 255)  -- Cyan color
-    
-    -- Position the wall in front of the player
-    local character = LocalPlayer.Character
-    if character and character:FindFirstChild("HumanoidRootPart") then
-        local rootPart = character.HumanoidRootPart
-        local lookVector = rootPart.CFrame.LookVector
+    -- Teleport each TouchGiver one by one with small delays
+    for i, touchGiverData in pairs(touchGivers) do
+        -- Teleport to player's position
+        touchGiverData.object:PivotTo(CFrame.new(humanoidRootPart.Position))
         
-        -- Position wall 20 studs in front of player
-        m4a1.CFrame = CFrame.new(
-            rootPart.Position + (lookVector * 20),
-            rootPart.Position + (lookVector * 100)
-        )
+        -- Wait a bit for the touch event to trigger
+        wait(0.1)
+        
+        -- Return to original position immediately
+        touchGiverData.object:PivotTo(touchGiverData.originalCFrame)
+        
+        -- Small delay before next one
+        if i < #touchGivers then
+            wait(0.1)
+        end
     end
     
-    WallVisible = true
-    print("M4A1 transformed into Wall")
-end
-
--- Remove M4A1 Wall function (restore original)
-local function removeM4A1Wall()
-    local m4a1 = Workspace:FindFirstChild("M4A1")
-    if m4a1 and OriginalM4A1Properties then
-        -- Restore original properties
-        m4a1.Size = OriginalM4A1Properties.Size
-        m4a1.Transparency = OriginalM4A1Properties.Transparency
-        m4a1.CanCollide = OriginalM4A1Properties.CanCollide
-        m4a1.Anchored = OriginalM4A1Properties.Anchored
-        m4a1.Material = OriginalM4A1Properties.Material
-        m4a1.Color = OriginalM4A1Properties.Color
-        m4a1.CFrame = OriginalM4A1Properties.CFrame
+    -- Re-enable collision for player
+    for _, part in pairs(character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = true
+        end
     end
     
-    WallVisible = false
-    print("M4A1 restored to original")
-end
-
--- Toggle M4A1 Wall function
-local function toggleM4A1Wall()
-    if WallVisible then
-        removeM4A1Wall()
-    else
-        createM4A1Wall()
-    end
+    print("TouchGiver teleportation complete!")
 end
 
 -- Check if a player is an enemy
@@ -268,8 +246,8 @@ UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
     if input.KeyCode == TOGGLE_KEY then
         toggleESP()
-    elseif input.KeyCode == WALL_KEY then  -- J key for wall
-        toggleM4A1Wall()
+    elseif input.KeyCode == TELEPORT_KEY then  -- J key for teleporting TouchGivers
+        teleportAllTouchGivers()
     end
     if input.UserInputType == Enum.UserInputType.MouseButton2 then
         RightMouseDown = true
@@ -350,23 +328,6 @@ local function aimAtTarget()
     end
 end
 
--- Update M4A1 Wall position to follow player
-local function updateWallPosition()
-    if WallVisible then
-        local m4a1 = Workspace:FindFirstChild("M4A1")
-        if m4a1 and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            local rootPart = LocalPlayer.Character.HumanoidRootPart
-            local lookVector = rootPart.CFrame.LookVector
-            
-            -- Update wall position to always be in front of player
-            m4a1.CFrame = CFrame.new(
-                rootPart.Position + (lookVector * 20),
-                rootPart.Position + (lookVector * 100)
-            )
-        end
-    end
-end
-
 -- Main loop
 RunService.RenderStepped:Connect(function()
     -- Update ESP labels
@@ -390,11 +351,6 @@ RunService.RenderStepped:Connect(function()
     else
         FOVCircle.UIStroke.Color = Color3.fromRGB(255, 255, 0)
     end
-    
-    -- Update wall position if it exists
-    if WallVisible then
-        updateWallPosition()
-    end
 end)
 
 -- Auto-refresh
@@ -407,5 +363,5 @@ end
 
 print("Script loaded successfully!")
 print("F - Toggle ESP")
-print("J - Toggle M4A1 Wall")
+print("J - Teleport TouchGivers")
 print("Right Click - Activate Aimbot")
